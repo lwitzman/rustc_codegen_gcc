@@ -123,9 +123,8 @@ pub fn compile_codegen_unit(
             context.add_command_line_option("-mavx");
         }
 
-        for arg in &tcx.sess.opts.cg.llvm_args {
-            context.add_command_line_option(arg);
-        }
+        gcc_util::add_base_args(&context, &tcx.sess);
+
         // NOTE: This is needed to compile the file src/intrinsic/archs.rs during a bootstrap of rustc.
         context.add_command_line_option("-fno-var-tracking-assignments");
         // NOTE: an optimization (https://github.com/rust-lang/rustc_codegen_gcc/issues/53).
@@ -152,6 +151,7 @@ pub fn compile_codegen_unit(
         let target_cpu = gcc_util::target_cpu(tcx.sess);
         if target_cpu != "generic" {
             context.add_command_line_option(format!("-march={}", target_cpu));
+            context.add_driver_option(format!("-march={}", target_cpu));
         }
 
         if tcx
@@ -261,6 +261,8 @@ pub fn add_pic_option<'gcc>(context: &Context<'gcc>, relocation_model: RelocMode
         rustc_target::spec::RelocModel::Static => {
             context.add_command_line_option("-fno-pie");
             context.add_driver_option("-fno-pie");
+            context.add_command_line_option("-fno-pic");
+            context.add_driver_option("-fno-pic");
         }
         rustc_target::spec::RelocModel::Pic => {
             context.add_command_line_option("-fPIC");

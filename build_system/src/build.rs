@@ -13,6 +13,7 @@ struct BuildArg {
     flags: Vec<String>,
     config_info: ConfigInfo,
     build_sysroot: bool,
+    only_libcore: bool,
 }
 
 impl BuildArg {
@@ -24,6 +25,7 @@ impl BuildArg {
 
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--only-libcore" => build_arg.only_libcore = true,
                 "--sysroot" => {
                     build_arg.build_sysroot = true;
                 }
@@ -46,6 +48,7 @@ impl BuildArg {
             r#"
 `build` command help:
 
+    --only-libcore         : Only build libcore
     --sysroot              : Build with sysroot"#
         );
         ConfigInfo::show_usage();
@@ -97,7 +100,7 @@ fn cleanup_sysroot_previous_build(library_dir: &Path) {
     );
 }
 
-pub fn build_sysroot(env: &HashMap<String, String>, config: &ConfigInfo) -> Result<(), String> {
+pub fn build_sysroot(env: &HashMap<String, String>, config: &ConfigInfo, only_libcore: bool) -> Result<(), String> {
     let start_dir = get_sysroot_dir();
 
     let library_dir = start_dir.join("sysroot_src").join("library");
@@ -141,6 +144,17 @@ pub fn build_sysroot(env: &HashMap<String, String>, config: &ConfigInfo) -> Resu
 
     args.push(&"--features");
     args.push(&"backtrace");
+
+    if only_libcore {
+        args.push(&"-p");
+        args.push(&"core");
+
+        args.push(&"-p");
+        args.push(&"compiler_builtins");
+
+        args.push(&"-p");
+        args.push(&"alloc");
+    }
 
     let mut env = env.clone();
     env.insert("RUSTFLAGS".to_string(), rustflags);
@@ -208,7 +222,7 @@ fn build_codegen(args: &mut BuildArg) -> Result<(), String> {
     create_dir(gccjit_target)?;
     if args.build_sysroot {
         println!("[BUILD] sysroot");
-        build_sysroot(&env, &args.config_info)?;
+        build_sysroot(&env, &args.config_info, args.only_libcore)?;
     }
     Ok(())
 }
