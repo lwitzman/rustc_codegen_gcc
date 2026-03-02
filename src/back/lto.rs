@@ -538,6 +538,10 @@ pub fn optimize_thin_module(
         Some(thin_buffer) => Arc::clone(&thin_buffer.context),
         None => {
             let context = Context::default();
+            for arg in &_cgcx.opts.cg.llvm_args {
+                context.add_command_line_option(arg);
+                context.add_driver_option(arg);
+            }
             let len = thin_module.shared.thin_buffers.len();
             let module = &thin_module.shared.serialized_modules[thin_module.idx - len];
             match *module {
