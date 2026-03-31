@@ -89,9 +89,9 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use back::lto::{ThinBuffer, ThinData};
-use gccjit::{CType, Context, OptimizationLevel};
 #[cfg(feature = "master")]
-use gccjit::{TargetInfo, Version};
+use gccjit::Version;
+use gccjit::{CType, Context, OptimizationLevel};
 use rustc_ast::expand::allocator::AllocatorKind;
 use rustc_codegen_ssa::back::lto::{SerializedModule, ThinModule};
 use rustc_codegen_ssa::back::write::{
@@ -153,6 +153,26 @@ impl TargetInfo {
     }
 }
 
+// Conservative fallback for `gccjit::TargetInfo` for
+// when `Context::get_target_info` probing is unreliable
+#[cfg(feature = "master")]
+#[derive(Debug)]
+struct DummyTargetInfo;
+
+#[cfg(feature = "master")]
+impl DummyTargetInfo {
+    fn cpu_supports(&self, _feature: &str) -> bool {
+        false
+    }
+
+    fn supports_target_dependent_type(&self, _typ: CType) -> bool {
+        false
+    }
+}
+
+#[cfg(feature = "master")]
+type TargetInfo = DummyTargetInfo;
+
 #[derive(Clone)]
 pub struct LockedTargetInfo {
     info: Arc<Mutex<IntoDynSyncSend<TargetInfo>>>,
@@ -189,20 +209,6 @@ impl CodegenBackend for GccCodegenBackend {
     }
 
     fn init(&self, _sess: &Session) {
-        #[cfg(feature = "master")]
-        {
-            let target_cpu = target_cpu(_sess);
-
-            // Get the second TargetInfo with the correct CPU features by setting the arch.
-            let context = Context::default();
-            if target_cpu != "generic" {
-                context.add_command_line_option(format!("-march={}", target_cpu));
-            }
-            gcc_util::add_base_args(&context, _sess);
-
-            **self.target_info.info.lock().expect("lock") = context.get_target_info();
-        }
-
         #[cfg(feature = "master")]
         gccjit::set_global_personality_function_name(b"rust_eh_personality\0");
 
@@ -431,8 +437,7 @@ pub fn __rustc_codegen_backend() -> Box<dyn CodegenBackend> {
     let info = {
         // Check whether the target supports 128-bit integers, and sized floating point types (like
         // Float16).
-        let context = Context::default();
-        Arc::new(Mutex::new(IntoDynSyncSend(context.get_target_info())))
+        Arc::new(Mutex::new(IntoDynSyncSend(DummyTargetInfo)))
     };
     #[cfg(not(feature = "master"))]
     let info = Arc::new(Mutex::new(IntoDynSyncSend(TargetInfo {

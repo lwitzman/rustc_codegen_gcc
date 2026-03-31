@@ -139,12 +139,9 @@ pub fn target_cpu(sess: &Session) -> &str {
 }
 
 pub fn add_base_args(context: &Context<'_>, sess: &Session) {
-    if !sess.target.options.llvm_abiname.is_empty() {
-        context.add_command_line_option(format!("-mabi={}", sess.target.options.llvm_abiname));
-        context.add_driver_option(format!("-mabi={}", sess.target.options.llvm_abiname));
-    }
     for arg in &sess.opts.cg.llvm_args {
         context.add_command_line_option(arg);
+        context.add_driver_option(arg);
     }
     for arg in sess.target.options.llvm_args.as_ref() {
         context.add_command_line_option(arg);
